@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from './store.jsx';
 import {
-  BUCKET_ORDER, accountSummary, addMonths, budgetStatus, categoryShares, currentMonth, daysSince, dueBucket, fmt, frequentCategories,
+  BUCKET_ORDER, accountSummary, addMonths, budgetStatus, categoryShares, creditStatus, currentMonth, daysSince, dueBucket, fmt, frequentCategories,
   groupByDate, isoDate, lastEntry, monthOf, monthRange, monthlySeries, pctChange, savingsRate, spendPace, totals, unpaidForMonth,
 } from './logic.js';
 import { BarChart, Donut, Icon, MonthNav } from './ui.jsx';
@@ -166,7 +166,12 @@ export default function Home({ go }) {
             {activeAccounts.slice(0, 5).map((r) => (
               <div key={r.acc.id} className="acc-row">
                 <span className="dot" style={{ background: r.acc.color, width: 10, height: 10 }} />
-                <span className="grow">{accName(r.acc.id)}</span>
+                <span className="grow">
+                  {accName(r.acc.id)}
+                  {creditStatus(r.acc, r.balance) && (
+                    <span className={'muted small ' + (creditStatus(r.acc, r.balance).level === 'over' ? 'bad-text' : '')}> · {t('acc.availableShort', { amt: fmt(Math.max(creditStatus(r.acc, r.balance).available, 0)) })}</span>
+                  )}
+                </span>
                 <b><BalanceText acc={r.acc} balance={r.balance} cur="" /></b>
               </div>
             ))}

@@ -267,13 +267,32 @@ export function accountBalance(acc, txs, transfers, asOf) {
   return balance;
 }
 
+// Credit card against its limit: how much is owed, how much can still be used.
+// available = limit + balance, so a card with a credit balance (overpaid) has more than its limit.
+// Returns null for accounts that are not credit cards or have no limit set.
+export function creditStatus(acc, balance) {
+  const limit = acc.type === 'credit' ? acc.creditLimit || 0 : 0;
+  if (!(limit > 0)) return null;
+  const owed = Math.max(-balance, 0);
+  const ratio = owed / limit;
+  return { limit, owed, available: limit + balance, ratio, level: ratio >= 1 ? 'over' : ratio >= 0.8 ? 'warn' : 'ok' };
+}
+
 // Balances of the active (non-archived) accounts plus the totals.
 export function accountSummary(accounts, txs, transfers, asOf) {
   const rows = accounts.map((acc) => ({ acc, balance: accountBalance(acc, txs, transfers, asOf) }));
   const active = rows.filter((r) => !r.acc.archived);
   const assets = active.reduce((a, r) => a + Math.max(r.balance, 0), 0);
   const owed = active.reduce((a, r) => a + Math.max(-r.balance, 0), 0);
-  return { rows, total: active.reduce((a, r) => a + r.balance, 0), assets, owed };
+  const cards = active.map((r) => creditStatus(r.acc, r.balance)).filter(Boolean);
+  return {
+    rows,
+    total: active.reduce((a, r) => a + r.balance, 0),
+    assets,
+    owed,
+    hasLimits: cards.length > 0,
+    availableCredit: cards.reduce((a, c) => a + Math.max(c.available, 0), 0),
+  };
 }
 
 // Everything that moved money in or out of one account, newest first.

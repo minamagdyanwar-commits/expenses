@@ -35,6 +35,9 @@ export const DEFAULT_ACCOUNT_NAMES = { 'acc-main': ['Main account', 'الحسا�
 
 const ar = {
   'nav.accounts': 'الحسابات',
+  'acc.limit': 'حد الكارت ({cur})', 'acc.limitHint': 'الحد الأقصى المسموح للكارت. هنحسب لك المتاح للاستخدام = الحد − المديونية.',
+  'acc.availableCredit': 'المتاح للاستخدام', 'acc.availableOf': 'المتاح {avail} من {limit}', 'acc.used': 'مستخدم {pct}%',
+  'acc.overLimit': 'تعدّيت الحد بـ {amt}', 'acc.availableShort': 'متاح {amt}',
   'set.about': 'عن التطبيق', 'set.version': 'الإصدار', 'set.build': 'تاريخ البناء', 'set.commit': 'رقم الـ commit',
   'setup.welcome': 'خلّينا نبدأ', 'setup.title': 'رصيدك دلوقتي',
   'setup.intro': 'اكتب الحسابات اللي معاك والرصيد اللي في كل واحد النهارده. من هنا هنحسب كل حاجة بعد كده.',
@@ -131,6 +134,9 @@ const ar = {
 
 const en = {
   'nav.accounts': 'Accounts',
+  'acc.limit': 'Card limit ({cur})', 'acc.limitHint': 'The most the card allows. You will see available credit = limit − what you owe.',
+  'acc.availableCredit': 'Available to spend', 'acc.availableOf': '{avail} available of {limit}', 'acc.used': '{pct}% used',
+  'acc.overLimit': 'Over the limit by {amt}', 'acc.availableShort': '{amt} available',
   'set.about': 'About', 'set.version': 'Version', 'set.build': 'Built', 'set.commit': 'Commit',
   'setup.welcome': "Let's get started", 'setup.title': 'Your balance right now',
   'setup.intro': 'Enter your accounts and what each one holds today. Everything you log from here on builds on these numbers.',
