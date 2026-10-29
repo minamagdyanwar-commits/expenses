@@ -1,0 +1,21 @@
+{
+  "name": "expense-tracker",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "clean": "node -e \"require('fs').readdirSync('.').filter(f=>/^index-.*\\.(js|css)$/.test(f)).forEach(f=>require('fs').unlinkSync(f))\"",
+    "build": "npm run clean && vite build",
+    "preview": "vite preview",
+    "test": "node --test tests/logic.test.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}
