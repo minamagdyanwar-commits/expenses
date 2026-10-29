@@ -1,6 +1,6 @@
 // Offline support: always try the network first, fall back to the cache when offline.
 // This avoids ever serving a stale build.
-const CACHE = 'expense-tracker-v3';
+const CACHE = 'expense-tracker-v5';
 
 self.addEventListener('install', () => self.skipWaiting());
 

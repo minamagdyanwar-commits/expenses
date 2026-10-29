@@ -1,0 +1,296 @@
+// Pure calculation helpers (no DOM, no React) so they can be unit tested with node --test.
+
+export const pad2 = (n) => String(n).padStart(2, '0');
+export const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+export const isoDate = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+export const monthOf = (date) => date.slice(0, 7);
+export const currentMonth = (d = new Date()) => monthOf(isoDate(d));
+
+export function addMonths(month, delta) {
+  const [y, m] = month.split('-').map(Number);
+  const idx = y * 12 + (m - 1) + delta;
+  return `${Math.floor(idx / 12)}-${pad2((idx % 12) + 1)}`;
+}
+
+export function monthRange(from, to) {
+  const out = [];
+  let m = from;
+  while (m <= to && out.length < 600) {
+    out.push(m);
+    m = addMonths(m, 1);
+  }
+  return out;
+}
+
+export function daysInMonth(month) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+export const fmt = (n) => Math.round(n).toLocaleString('en-US');
+
+export function totals(txs, month) {
+  let income = 0;
+  let expense = 0;
+  for (const t of txs) {
+    if (monthOf(t.date) !== month) continue;
+    if (t.type === 'income') income += t.amount;
+    else expense += t.amount;
+  }
+  return { income, expense, net: income - expense };
+}
+
+export function categoryShares(txs, month, type = 'expense') {
+  const map = new Map();
+  let sum = 0;
+  for (const t of txs) {
+    if (t.type !== type || monthOf(t.date) !== month) continue;
+    map.set(t.categoryId, (map.get(t.categoryId) || 0) + t.amount);
+    sum += t.amount;
+  }
+  return [...map.entries()]
+    .map(([categoryId, total]) => ({ categoryId, total, share: sum ? total / sum : 0 }))
+    .sort((a, b) => b.total - a.total);
+}
+
+// ---- recurring payments -------------------------------------------------
+
+export const payKey = (recId, month) => `${recId}|${month}`;
+
+export function recurringStatus(rec, month, payments, nowMonth) {
+  if (month < rec.startMonth || (rec.endMonth && month > rec.endMonth)) return 'none';
+  if (payments[payKey(rec.id, month)]) return 'paid';
+  return month <= nowMonth ? 'unpaid' : 'upcoming';
+}
+
+export function yearPlan(recurring, payments, txs, year, nowMonth) {
+  let planned = 0;
+  let paid = 0;
+  for (const rec of recurring) {
+    for (let m = 1; m <= 12; m++) {
+      const month = `${year}-${pad2(m)}`;
+      const status = recurringStatus(rec, month, payments, nowMonth);
+      if (status === 'none') continue;
+      planned += rec.amount;
+      if (status === 'paid') {
+        const tx = txs.find((t) => t.id === payments[payKey(rec.id, month)].txId);
+        paid += tx ? tx.amount : rec.amount;
+      }
+    }
+  }
+  return { planned, paid };
+}
+
+export function unpaidForMonth(recurring, payments, month, nowMonth) {
+  return recurring
+    .filter((rec) => recurringStatus(rec, month, payments, nowMonth) === 'unpaid')
+    .map((rec) => ({ rec, overdue: month < nowMonth }));
+}
+
+// How urgent an unpaid payment is: overdue (past month or past its due day),
+// soon (due within 7 days) or later.
+export function dueBucket(rec, month, nowMonth, today) {
+  if (month < nowMonth) return 'overdue';
+  const todayDay = Number(today.slice(8, 10));
+  const due = Math.min(rec.dueDay || 1, 28);
+  if (due < todayDay) return 'overdue';
+  if (due - todayDay <= 7) return 'soon';
+  return 'later';
+}
+
+export const BUCKET_ORDER = { overdue: 0, soon: 1, later: 2 };
+
+// ---- analytics ----------------------------------------------------------
+
+export function monthlySeries(txs, months, type, categoryId = 'all') {
+  const idx = new Map(months.map((m, i) => [m, i]));
+  const out = months.map(() => 0);
+  for (const t of txs) {
+    if (t.type !== type) continue;
+    if (categoryId !== 'all' && t.categoryId !== categoryId) continue;
+    const i = idx.get(monthOf(t.date));
+    if (i !== undefined) out[i] += t.amount;
+  }
+  return out;
+}
+
+export function describe(values) {
+  if (!values.length) return { avg: 0, min: 0, max: 0, std: 0 };
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  const std = Math.sqrt(values.reduce((a, b) => a + (b - avg) ** 2, 0) / values.length);
+  return { avg, min: Math.min(...values), max: Math.max(...values), std };
+}
+
+export function repeatability(values) {
+  const total = values.length;
+  const nonZero = values.filter((v) => v > 0);
+  const present = nonZero.length;
+  const stats = describe(nonZero);
+  const cv = stats.avg ? stats.std / stats.avg : 0;
+  const presence = total ? present / total : 0;
+  let label = 'No data';
+  if (present > 0) {
+    if (presence >= 0.8 && cv <= 0.25) label = 'Regular';
+    else if (presence < 0.5) label = 'Occasional';
+    else label = 'Irregular';
+  }
+  return { present, total, presence, cv, label };
+}
+
+// ---- home dashboard -----------------------------------------------------
+
+// Percentage change from prev to cur, or null when there is nothing to compare with.
+export function pctChange(cur, prev) {
+  if (!prev) return null;
+  return Math.round(((cur - prev) / prev) * 100);
+}
+
+// Share of income that was kept (0..100). null when there is no income.
+export function savingsRate(income, expense) {
+  if (!(income > 0)) return null;
+  return Math.round(((income - expense) / income) * 100);
+}
+
+// Daily average and end-of-month forecast. Only meaningful for the running month.
+export function spendPace(expense, month, today) {
+  if (monthOf(today) !== month || !(expense > 0)) return null;
+  const day = Number(today.slice(8, 10));
+  const dim = daysInMonth(month);
+  const daily = expense / day;
+  return { daily, forecast: expense + daily * (dim - day), daysLeft: dim - day };
+}
+
+// Entries grouped by date, newest first, with per-day income / expense totals.
+export function groupByDate(txs) {
+  const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+  const groups = [];
+  for (const t of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === t.date) last.items.push(t);
+    else groups.push({ date: t.date, items: [t], income: 0, expense: 0 });
+    const g = groups[groups.length - 1];
+    if (t.type === 'income') g.income += t.amount;
+    else g.expense += t.amount;
+  }
+  return groups;
+}
+
+// Most used categories over the last `days` days, for one-tap quick add.
+export function frequentCategories(txs, type, today, days = 90, n = 4) {
+  const since = isoDate(new Date(new Date(today + 'T00:00:00').getTime() - days * 86400000));
+  const count = new Map();
+  for (const t of txs) {
+    if (t.type !== type || t.date < since) continue;
+    const c = count.get(t.categoryId) || { n: 0, last: '' };
+    c.n += 1;
+    if (t.date > c.last) c.last = t.date;
+    count.set(t.categoryId, c);
+  }
+  return [...count.entries()]
+    .sort((a, b) => b[1].n - a[1].n || b[1].last.localeCompare(a[1].last))
+    .slice(0, n)
+    .map(([categoryId]) => categoryId);
+}
+
+export function lastEntry(txs) {
+  let best = null;
+  for (const t of txs) if (!best || t.date >= best.date) best = t;
+  return best;
+}
+
+// Spend against each category's monthly budget. level: ok < 80%, warn < 100%, over >= 100%.
+export function budgetStatus(categories, txs, month) {
+  const spent = new Map();
+  for (const t of txs) {
+    if (t.type === 'expense' && monthOf(t.date) === month) {
+      spent.set(t.categoryId, (spent.get(t.categoryId) || 0) + t.amount);
+    }
+  }
+  return categories
+    .filter((c) => c.type === 'expense' && c.budget > 0)
+    .map((cat) => {
+      const s = spent.get(cat.id) || 0;
+      const ratio = s / cat.budget;
+      return { cat, budget: cat.budget, spent: s, ratio, level: ratio >= 1 ? 'over' : ratio >= 0.8 ? 'warn' : 'ok' };
+    })
+    .sort((a, b) => b.ratio - a.ratio);
+}
+
+// Whole days since the last backup, or null when never backed up.
+export function daysSince(date, today) {
+  if (!date) return null;
+  return Math.floor((new Date(today + 'T00:00:00') - new Date(date + 'T00:00:00')) / 86400000);
+}
+
+// ---- backup / export ----------------------------------------------------
+
+export function isValidBackup(data) {
+  if (!data || typeof data !== 'object') return false;
+  return (
+    ['categories', 'transactions', 'recurring', 'payments'].every((k) => k in data) &&
+    Array.isArray(data.categories) &&
+    Array.isArray(data.transactions) &&
+    Array.isArray(data.recurring) &&
+    typeof data.payments === 'object'
+  );
+}
+
+export function toCsv(txs, categories, accounts = []) {
+  const names = new Map(categories.map((c) => [c.id, c.name]));
+  const accNames = new Map(accounts.map((a) => [a.id, a.name]));
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = [['date', 'type', 'category', 'amount', 'note', 'account'].join(',')];
+  [...txs]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .forEach((t) => rows.push([t.date, t.type, q(names.get(t.categoryId) || ''), t.amount, q(t.note), q(accNames.get(t.accountId) || '')].join(',')));
+  return rows.join('\n');
+}
+
+// ---- accounts -----------------------------------------------------------
+// An account's balance = opening balance + its income - its expenses
+// + transfers in - transfers out, counted up to and including `asOf`.
+// Credit cards are ordinary accounts whose balance is negative while money is owed.
+// Transfers are not income or expenses, so reports are unaffected by them.
+
+export function accountBalance(acc, txs, transfers, asOf) {
+  let balance = acc.openingBalance || 0;
+  for (const t of txs) {
+    if (t.accountId !== acc.id || t.date > asOf) continue;
+    balance += t.type === 'income' ? t.amount : -t.amount;
+  }
+  for (const tr of transfers) {
+    if (tr.date > asOf) continue;
+    if (tr.toId === acc.id) balance += tr.amount;
+    if (tr.fromId === acc.id) balance -= tr.amount;
+  }
+  return balance;
+}
+
+// Balances of the active (non-archived) accounts plus the totals.
+export function accountSummary(accounts, txs, transfers, asOf) {
+  const rows = accounts.map((acc) => ({ acc, balance: accountBalance(acc, txs, transfers, asOf) }));
+  const active = rows.filter((r) => !r.acc.archived);
+  const assets = active.reduce((a, r) => a + Math.max(r.balance, 0), 0);
+  const owed = active.reduce((a, r) => a + Math.max(-r.balance, 0), 0);
+  return { rows, total: active.reduce((a, r) => a + r.balance, 0), assets, owed };
+}
+
+// Everything that moved money in or out of one account, newest first.
+export function accountActivity(accId, txs, transfers) {
+  const items = [];
+  for (const t of txs) {
+    if (t.accountId === accId) items.push({ kind: 'tx', id: t.id, date: t.date, delta: t.type === 'income' ? t.amount : -t.amount, tx: t });
+  }
+  for (const tr of transfers) {
+    if (tr.toId === accId) items.push({ kind: 'transfer', id: tr.id, date: tr.date, delta: tr.amount, transfer: tr, otherId: tr.fromId });
+    if (tr.fromId === accId) items.push({ kind: 'transfer', id: tr.id, date: tr.date, delta: -tr.amount, transfer: tr, otherId: tr.toId });
+  }
+  return items.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function accountInUse(accId, txs, transfers, recurring = []) {
+  return txs.some((t) => t.accountId === accId) || transfers.some((t) => t.fromId === accId || t.toId === accId) || recurring.some((r) => r.accountId === accId);
+}
+
+export const firstActiveAccount = (accounts) => (accounts.find((a) => !a.archived) || accounts[0] || {}).id;
