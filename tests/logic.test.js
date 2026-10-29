@@ -138,3 +138,28 @@ test('accountInUse / firstActiveAccount', () => {
   assert.equal(L.accountInUse('a', [], [], []), false);
   assert.equal(L.firstActiveAccount([{ id: 'x', archived: true }, { id: 'y' }]), 'y');
 });
+
+test('creditStatus: owed, available and level against the limit', () => {
+  const card = { type: 'credit', creditLimit: 10000 };
+  assert.deepEqual(L.creditStatus(card, -2500), { limit: 10000, owed: 2500, available: 7500, ratio: 0.25, level: 'ok' });
+  assert.equal(L.creditStatus(card, -8500).level, 'warn');
+  const over = L.creditStatus(card, -11000);
+  assert.equal(over.level, 'over');
+  assert.equal(over.available, -1000);
+  assert.equal(L.creditStatus(card, 500).available, 10500); // overpaid card
+  assert.equal(L.creditStatus({ type: 'credit' }, -100), null); // no limit set
+  assert.equal(L.creditStatus({ type: 'bank', creditLimit: 5000 }, -100), null); // not a card
+});
+
+test('accountSummary reports available credit across active cards', () => {
+  const accounts = [
+    { id: 'a', type: 'bank', openingBalance: 1000 },
+    { id: 'c1', type: 'credit', creditLimit: 10000, openingBalance: -2000 },
+    { id: 'c2', type: 'credit', creditLimit: 5000, openingBalance: -6000 },
+    { id: 'c3', type: 'credit', creditLimit: 9000, openingBalance: 0, archived: true },
+  ];
+  const s = L.accountSummary(accounts, [], [], '2026-10-31');
+  assert.equal(s.hasLimits, true);
+  assert.equal(s.availableCredit, 8000); // 8000 + 0 (over-limit card counts as 0) ; archived ignored
+  assert.equal(L.accountSummary([{ id: 'a', type: 'bank' }], [], [], '2026-10-31').hasLimits, false);
+});

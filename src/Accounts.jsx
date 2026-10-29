@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PALETTE, useApp } from './store.jsx';
-import { accountActivity, accountInUse, accountSummary, fmt, firstActiveAccount, isoDate } from './logic.js';
+import { accountActivity, accountInUse, accountSummary, creditStatus, fmt, firstActiveAccount, isoDate } from './logic.js';
 import AddSheet from './AddSheet.jsx';
 import { Field, Icon, Sheet, numericOnly, parseAmount } from './ui.jsx';
 
@@ -13,6 +13,25 @@ export function BalanceText({ acc, balance, cur }) {
   return <span className={balance < 0 ? 'bad-text' : ''} dir="ltr">{balance < 0 ? '−' : ''}{fmt(Math.abs(balance))} {cur}</span>;
 }
 
+// Used / available against the card limit (renders nothing for non-cards or cards without a limit).
+export function CreditMeter({ acc, balance, cur }) {
+  const { t } = useApp();
+  const c = creditStatus(acc, balance);
+  if (!c) return null;
+  return (
+    <div className="credit">
+      <div className={'meter ' + c.level} role="progressbar" aria-valuenow={Math.round(c.ratio * 100)} aria-valuemin={0} aria-valuemax={100}>
+        <i style={{ width: Math.min(100, c.ratio * 100) + '%' }} />
+      </div>
+      <div className={'small ' + (c.level === 'over' ? 'bad-text bold' : 'muted')}>
+        {c.level === 'over'
+          ? t('acc.overLimit', { amt: fmt(-c.available) + ' ' + cur })
+          : `${t('acc.availableOf', { avail: fmt(c.available), limit: fmt(c.limit) })} ${cur} · ${t('acc.used', { pct: Math.round(c.ratio * 100) })}`}
+      </div>
+    </div>
+  );
+}
+
 function AccountForm({ acc, onClose }) {
   const { state, dispatch, t, toast } = useApp();
   const editing = !!acc;
@@ -21,13 +40,18 @@ function AccountForm({ acc, onClose }) {
   const [color, setColor] = useState(acc?.color ?? PALETTE[state.accounts.length % PALETTE.length]);
   const initial = acc ? (acc.type === 'credit' ? Math.max(-(acc.openingBalance || 0), 0) : acc.openingBalance || 0) : 0;
   const [opening, setOpening] = useState(initial ? String(initial) : '');
+  const [limit, setLimit] = useState(acc?.creditLimit ? String(acc.creditLimit) : '');
   const credit = type === 'credit';
   const used = editing && accountInUse(acc.id, state.transactions, state.transfers, state.recurring);
   const cur = state.settings.currency;
 
   const save = () => {
     const amount = parseAmount(opening) || 0;
-    dispatch({ type: 'acc/save', acc: { ...(acc || {}), name: name.trim(), type, color, openingBalance: credit ? -amount : amount } });
+    const next = { ...(acc || {}), name: name.trim(), type, color, openingBalance: credit ? -amount : amount };
+    const cardLimit = parseAmount(limit);
+    if (credit && cardLimit > 0) next.creditLimit = cardLimit;
+    else delete next.creditLimit;
+    dispatch({ type: 'acc/save', acc: next });
     toast(t('acc.saved'));
     onClose();
   };
@@ -48,6 +72,14 @@ function AccountForm({ acc, onClose }) {
         <input inputMode="decimal" placeholder="0" value={opening} onChange={(e) => setOpening(numericOnly(e.target.value))} />
       </Field>
       <div className="muted small">{t(credit ? 'acc.openingHintCredit' : 'acc.openingHint')}</div>
+      {credit && (
+        <>
+          <Field label={t('acc.limit', { cur })}>
+            <input inputMode="decimal" placeholder="—" value={limit} onChange={(e) => setLimit(numericOnly(e.target.value))} />
+          </Field>
+          <div className="muted small">{t('acc.limitHint')}</div>
+        </>
+      )}
       <div className="muted small bold">{t('cat.colour')}</div>
       <div className="chips">
         {PALETTE.map((c) => (
@@ -122,6 +154,7 @@ function AccountDetail({ acc, asOf, onClose, onEdit, onTransfer, onEditTransfer,
       <div className="card">
         <div className="muted small">{t('acc.balance')} · {t('acc.type.' + acc.type)} · {asOf}</div>
         <div className="big-num"><BalanceText acc={acc} balance={rows[0].balance} cur={cur} /></div>
+        <CreditMeter acc={acc} balance={rows[0].balance} cur={cur} />
       </div>
       <div className="pair" style={{ gap: 10 }}>
         <button className="btn" onClick={onTransfer}>{t('acc.transfer')}</button>
@@ -167,6 +200,7 @@ export default function Accounts() {
       <span className="grow">
         <div className="bold">{accName(r.acc.id)} {r.acc.archived && <span className="muted small">{t('acc.archivedTag')}</span>}</div>
         <div className="muted small">{t('acc.type.' + r.acc.type)}</div>
+        <CreditMeter acc={r.acc} balance={r.balance} cur={cur} />
       </span>
       <b><BalanceText acc={r.acc} balance={r.balance} cur={cur} /></b>
     </button>
@@ -182,6 +216,12 @@ export default function Accounts() {
           <div><span className="label">{t('acc.assets')}</span><b style={{ color: 'var(--income)' }}>{fmt(summary.assets)}</b></div>
           <div><span className="label">{t('acc.owed')}</span><b style={{ color: 'var(--expense)' }}>{fmt(summary.owed)}</b></div>
         </div>
+        {summary.hasLimits && (
+          <div className="row between">
+            <span className="label">{t('acc.availableCredit')}</span>
+            <b>{fmt(summary.availableCredit)} {cur}</b>
+          </div>
+        )}
       </div>
       <Field label={t('acc.asOf')}><input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value || isoDate())} /></Field>
 

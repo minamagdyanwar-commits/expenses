@@ -28,6 +28,7 @@ export default function Setup() {
         color: PALETTE[i % PALETTE.length],
         openingBalance: value(r),
         useDefaultId: !!r.main,
+        ...(r.type === 'credit' && parseAmount(r.limit) > 0 ? { creditLimit: parseAmount(r.limit) } : {}),
       };
     });
     dispatch({ type: 'setup/complete', accounts, currency: cur });
@@ -64,7 +65,15 @@ export default function Setup() {
             <Field label={t(r.type === 'credit' ? 'acc.openingOwed' : 'acc.opening', { cur })}>
               <input inputMode="decimal" placeholder="0" aria-label={t('acc.opening', { cur })} value={r.amount} onChange={(e) => update(i, { amount: numericOnly(e.target.value) })} />
             </Field>
-            {r.type === 'credit' && <div className="muted small">{t('setup.cardHint')}</div>}
+            {r.type === 'credit' && (
+              <>
+                <div className="muted small">{t('setup.cardHint')}</div>
+                <Field label={t('acc.limit', { cur })}>
+                  <input inputMode="decimal" placeholder="—" aria-label={t('acc.limit', { cur })} value={r.limit || ''} onChange={(e) => update(i, { limit: numericOnly(e.target.value) })} />
+                </Field>
+                <div className="muted small">{t('acc.limitHint')}</div>
+              </>
+            )}
           </div>
         ))}
 

@@ -164,3 +164,5 @@ input, select, textarea { font-family: inherit; font-size: 16px; color: var(--in
 .lang-seg { min-width: 180px; }
 .lang-seg button { height: 36px; font-size: 13px; }
 .big-title { font-size: 28px; }
+.credit { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.hero .row b { font-size: 16px; }
