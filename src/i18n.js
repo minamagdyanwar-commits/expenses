@@ -35,6 +35,7 @@ export const DEFAULT_ACCOUNT_NAMES = { 'acc-main': ['Main account', 'الحسا�
 
 const ar = {
   'nav.accounts': 'الحسابات',
+  'set.update': 'تحديث التطبيق لأحدث نسخة', 'set.updateHint': 'بيمسح الملفات المخزّنة للتطبيق بس ويحمّل النسخة الجديدة. بياناتك ما بتتأثرش.',
   'acc.limit': 'حد الكارت ({cur})', 'acc.limitHint': 'الحد الأقصى المسموح للكارت. هنحسب لك المتاح للاستخدام = الحد − المديونية.',
   'acc.availableCredit': 'المتاح للاستخدام', 'acc.availableOf': 'المتاح {avail} من {limit}', 'acc.used': 'مستخدم {pct}%',
   'acc.overLimit': 'تعدّيت الحد بـ {amt}', 'acc.availableShort': 'متاح {amt}',
@@ -134,6 +135,7 @@ const ar = {
 
 const en = {
   'nav.accounts': 'Accounts',
+  'set.update': 'Update to the latest version', 'set.updateHint': 'Clears the app files cached on this device and reloads the newest version. Your data is not touched.',
   'acc.limit': 'Card limit ({cur})', 'acc.limitHint': 'The most the card allows. You will see available credit = limit − what you owe.',
   'acc.availableCredit': 'Available to spend', 'acc.availableOf': '{avail} available of {limit}', 'acc.used': '{pct}% used',
   'acc.overLimit': 'Over the limit by {amt}', 'acc.availableShort': '{amt} available',
